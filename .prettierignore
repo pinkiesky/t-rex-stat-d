@@ -1,0 +1,7 @@
+node_modules/
+dist/
+build/
+.agents/
+.aws/
+.codex/
+package-lock.json
