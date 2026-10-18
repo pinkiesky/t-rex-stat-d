@@ -112,10 +112,11 @@ test('minute timer, local midnight rollover, live metrics and unchanged text', (
   const app = boot();
 
   assert.ok(app.text('23:59'));
-  assert.ok(app.text('SUN OCT 18'));
+  assert.ok(app.text('sun'));
+  assert.ok(app.text('OCT 18'));
   assert.ok(app.text('98,765'));
   assert.ok(app.text('12/18C'));
-  assert.ok(app.text('/dev/btr0'));
+  assert.ok(app.text('bat'));
   assert.ok(app.text('86%'));
   assert.equal(app.text('heart_rate'), undefined);
   assert.equal(app.timers.size, 1);
@@ -130,7 +131,8 @@ test('minute timer, local midnight rollover, live metrics and unchanged text', (
   app.sensors.STEP.current = 0;
   app.tick();
   assert.ok(app.text('00:00'));
-  assert.ok(app.text('MON OCT 19'));
+  assert.ok(app.text('mon'));
+  assert.ok(app.text('OCT 19'));
   assert.ok(app.text('0'));
   app.sensors.STEP.current = 12345;
   app.listeners.get('STEP')();
@@ -152,7 +154,8 @@ test('12-hour midnight/noon and leap-day date formatting', () => {
   assert.ok(app.text('PM'));
   Object.assign(app.sensors.TIME, { year: 2028, month: 2, day: 29 });
   app.tick();
-  assert.ok(app.text('TUE FEB 29'));
+  assert.ok(app.text('tue'));
+  assert.ok(app.text('FEB 29'));
 });
 
 test('pause/resume and destruction cancel work, including timer handle zero', () => {
@@ -190,7 +193,7 @@ test('missing metrics and unsupported optional sensors', () => {
   assert.equal(app.widgets.filter((w) => w.text === '--').length, 3);
   const withoutWeather = boot({ weather: false });
 
-  assert.equal(withoutWeather.text('/dev/forecast'), undefined);
+  assert.equal(withoutWeather.text('temp'), undefined);
   assert.ok(withoutWeather.text('98,765'));
 });
 
@@ -309,5 +312,5 @@ test('text positions and dimensions use shared symbol-grid edges', () => {
     assert.ok(onEdge(widget.y, 80, 31));
     assert.ok(onEdge(widget.y + widget.h + 2, 80, 31));
   }
-  assert.equal(app.text('/dev/forecast').x + app.text('/dev/forecast').w, app.text('12/18C').x);
+  assert.equal(app.text('temp').x + app.text('temp').w, app.text('12/18C').x);
 });

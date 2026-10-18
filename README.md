@@ -9,7 +9,7 @@ Zeus 1.9.3 and @zeppos/device-types 4.0.0 were already installed.
 
 ## Behavior
 
-- Terminal output layout: `user@t-rex:~$ watch_info`, a small date on its own
+- Terminal output layout: `user@t-rex:~$ watchstat`, a small date on its own
   line, large left-aligned HH:MM, then steps, battery percentage, and forecast rows.
   Metric values start at a shared, left-aligned tab stop after the labels.
 - System 12/24-hour preference, AM/PM and English calendar date.

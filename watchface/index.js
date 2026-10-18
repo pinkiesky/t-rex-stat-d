@@ -8,9 +8,9 @@ const FONT_PATH = 'fonts/Modeseven-L3n5.ttf';
 const DEBUG = false;
 // Modeseven: 600-unit advance / 1000 units per em, plus char_space.
 const GRID = { x: 64, y: 80, cellWidth: FONT.metric * 0.6 + 1, cellHeight: FONT.metric, rowGap: 2 };
-const LAYOUT = { size: 480, columns: 19, valueColumn: 13, metricRow: 6 };
+const LAYOUT = { size: 480, columns: 19, valueColumn: 8, metricRow: 6 };
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 const pad = (value) => (value < 10 ? '0' + value : String(value));
 
@@ -33,7 +33,7 @@ function formatDate(time) {
       time.day) %
     7;
 
-  return DAYS[weekday] + ' ' + MONTHS[time.month - 1] + ' ' + pad(time.day);
+  return { weekday: DAYS[weekday], date: MONTHS[time.month - 1] + ' ' + pad(time.day) };
 }
 
 function formatMetric(value, suffix, minimum = 0, maximum = Infinity) {
@@ -176,21 +176,36 @@ function createWidgets(sensors) {
     show_level: hmUI.show_level.ONLY_NORMAL
   });
   drawDebugGrid();
-  createText({ row: 0, size: FONT.header, text: '$ watch_info' });
+  createText({ row: 0, size: FONT.header, text: '$ watchstat' });
   const fields = {
-    date: createText({ row: 5, size: FONT.header, text: '--', color: COLOR.secondary }),
-    time: createText({ row: 1, rows: 4, size: FONT.clock, text: '--:--' }),
+    weekday: createText({
+      column: LAYOUT.valueColumn,
+      row: 1,
+      columns: 3,
+      size: FONT.header,
+      text: '--',
+      color: COLOR.primary
+    }),
+    date: createText({
+      column: 0,
+      row: 1,
+      columns: 6,
+      size: FONT.header,
+      text: '--',
+      color: COLOR.secondary
+    }),
+    time: createText({ row: 2, rows: 4, size: FONT.clock, text: '--:--' }),
     steps: null,
     weather: null,
     battery: null
   };
   const metrics = [
-    { key: 'steps', label: '/dev/steps', size: FONT.steps },
-    { key: 'battery', label: '/dev/btr0', size: FONT.metric }
+    { key: 'steps', label: 'steps', size: FONT.steps },
+    { key: 'battery', label: 'bat', size: FONT.metric }
   ];
 
   if (sensors.weather) {
-    metrics.push({ key: 'weather', label: '/dev/forecast', size: FONT.metric });
+    metrics.push({ key: 'weather', label: 'temp', size: FONT.metric });
   }
 
   metrics.forEach((metric, index) => {
@@ -278,7 +293,10 @@ function createController(sensors, fields) {
 
     setText(fields.time, formatTime(sensors.time, twelveHour));
     setText(fields.period, twelveHour ? (sensors.time.hour < 12 ? 'AM' : 'PM') : '');
-    setText(fields.date, formatDate(sensors.time));
+    const date = formatDate(sensors.time);
+
+    setText(fields.weekday, date.weekday); 
+    setText(fields.date, date.date);
     // Also refresh daily values at midnight; reads do not activate measurements.
     updateSteps();
     updateWeather();
