@@ -2,7 +2,7 @@
   "configVersion": "v2",
   "app": {
     "appId": 22872,
-    "appName": "CLI Watch Face2",
+    "appName": "stat -d",
     "appType": "watchface",
     "version": {
       "code": 1,
@@ -76,7 +76,7 @@
   },
   "i18n": {
     "en-US": {
-      "appName": "CLI Watch Face"
+      "appName": "stat -d"
     }
   },
   "defaultLanguage": "en-US"

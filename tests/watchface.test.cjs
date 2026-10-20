@@ -354,7 +354,7 @@ test('diagnostic logs describe activity without adding timers or writes', () => 
   assert.equal(app.writes(), quiet.writes());
   app.listeners.get('STEP')();
   app.delegate.pause_call();
-  const events = app.logs.map((line) => JSON.parse(line.slice('[watchstat] '.length)));
+  const events = app.logs.map((line) => JSON.parse(line.slice('[stat -d] '.length)));
 
   for (const event of [
     'watchface.build.start',

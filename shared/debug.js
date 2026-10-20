@@ -9,7 +9,7 @@ export function debugLog(event, details = {}) {
     return;
   }
   console.log(
-    '[watchstat] ' +
+    '[stat -d] ' +
       JSON.stringify({
         seq: ++sequence,
         elapsedMs: Date.now() - startedAt,
