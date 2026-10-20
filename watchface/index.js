@@ -1,20 +1,37 @@
-// Requires the legacy 1.x runtime selected in app.json, even on API 4.2 devices.
-// Watch-face globals and @zos application APIs are not interchangeable.
+import * as ui from '@zos/ui';
+import { Time, Step, Battery, TIME_HOUR_FORMAT_12 } from '@zos/sensor';
+import { getDeviceInfo } from '@zos/device';
+import { debugLog, debugCount, debugSummary } from '../shared/debug';
+
+// The installed app SDK types omit this watch-face data binding.
+/** @type {typeof ui.data_type & { WEATHER_CURRENT: number }} */
+const DATA_TYPE = /** @type {typeof ui.data_type & { WEATHER_CURRENT: number }} */ (ui.data_type);
+// Watch-face normal-display flag; not exported by @zos/ui.
+const NORMAL_DISPLAY = { show_level: 1 };
 const COLOR = { background: 0x000000, primary: 0x66ff88, secondary: 0x3d9960 };
-const FONT = { header: 29, clock: 115, steps: 29, metric: 29, footer: 25 };
-// Experimental on the legacy watch-face runtime; custom TTF is documented for device apps.
+const FONT = { header: 29, clock: 120, steps: 29, metric: 29, footer: 25 };
+// Packaged custom font used by the modern TEXT widget.
 const FONT_PATH = 'fonts/Modeseven-L3n5.ttf';
 // Enable only while inspecting layout on the simulator/watch.
 const DEBUG = false;
 // Modeseven: 600-unit advance / 1000 units per em, plus char_space.
 const GRID = { x: 64, y: 80, cellWidth: FONT.metric * 0.6 + 1, cellHeight: FONT.metric, rowGap: 2 };
-const LAYOUT = { size: 480, columns: 19, valueColumn: 8, metricRow: 6 };
+const LAYOUT = { size: 480, columns: 20, valueColumn: 8, metricRow: 6 };
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 const pad = (value) => (value < 10 ? '0' + value : String(value));
 
 const valid = (value) => typeof value === 'number' && Number.isFinite(value);
+
+function createLoggedWidget(type, options) {
+  const widget = ui.createWidget(type, options);
+
+  debugCount('widgetsCreated');
+  debugLog('ui.create', { type, x: options.x, y: options.y });
+
+  return widget;
+}
 
 function formatTime(time, twelveHour) {
   return pad(twelveHour ? time.hour % 12 || 12 : time.hour) + ':' + pad(time.minute);
@@ -60,13 +77,15 @@ function gridBox({ column = 0, row = 0, columns = 1, rows = 1 }) {
 }
 
 function drawDebugLine({ x, y, w, h, color = 0x163822 }) {
-  hmUI.createWidget(hmUI.widget.FILL_RECT, {
+  createLoggedWidget(ui.widget.FILL_RECT, {
+    radius: 0,
+    angle: 0,
     x,
     y,
     w,
     h,
     color,
-    show_level: hmUI.show_level.ONLY_NORMAL
+    ...NORMAL_DISPLAY
   });
 }
 
@@ -114,69 +133,121 @@ function createText({
   columns = LAYOUT.columns,
   rows = 1,
   size = FONT.metric,
-  text,
-  color = COLOR.primary
+  text = '--',
+  color = COLOR.primary,
+  offsetX = 0,
+  offsetY = 0
 }) {
   const box = gridBox({ column, row, columns, rows });
-  const widget = hmUI.createWidget(hmUI.widget.TEXT, {
-    ...box,
+  const widget = createLoggedWidget(ui.widget.TEXT, {
+    x: box.x + offsetX,
+    y: box.y + offsetY,
+    w: box.w,
+    h: box.h,
     text,
     color,
     text_size: size,
     font: FONT_PATH,
     char_space: 1,
-    align_h: hmUI.align.LEFT,
-    align_v: hmUI.align.CENTER_V,
-    text_style: hmUI.text_style.ELLIPSIS,
-    show_level: hmUI.show_level.ONLY_NORMAL
+    align_h: ui.align.LEFT,
+    align_v: ui.align.CENTER_V,
+    text_style: ui.text_style.ELLIPSIS,
+    ...NORMAL_DISPLAY
   });
 
   drawSymbolEdges({ ...box, size });
 
-  return { widget, text };
+  return { widget, text, name: 'row' + row + '.col' + column };
+}
+
+function createTemperature({ row }) {
+  const position = {
+    column: LAYOUT.valueColumn,
+    row,
+    columns: LAYOUT.columns - LAYOUT.valueColumn
+  };
+  const box = gridBox(position);
+  const root = 'temperature/';
+
+  createLoggedWidget(ui.widget.TEXT_IMG, {
+    ...box,
+    type: DATA_TYPE.WEATHER_CURRENT,
+    // Leave text unset: setting it overrides the system data binding.
+    font_array: Array.from({ length: 10 }, (_, digit) => root + digit + '.png'),
+    negative_image: root + 'minus.png',
+    unit_en: root + 'C.png',
+    unit_sc: root + 'C.png',
+    unit_tc: root + 'C.png',
+    imperial_unit_en: root + 'F.png',
+    imperial_unit_sc: root + 'F.png',
+    imperial_unit_tc: root + 'F.png',
+    h_space: 0,
+    align_h: ui.align.LEFT,
+    ...NORMAL_DISPLAY
+  });
+
+  drawSymbolEdges({ ...box, size: FONT.metric });
 }
 
 function setText(field, text) {
-  if (field && field.text !== text) {
-    field.widget.setProperty(hmUI.prop.MORE, { text });
+  debugCount('textChecks');
+  if (field.text !== text) {
+    field.widget.setProperty(ui.prop.MORE, { text });
     field.text = text;
+    debugCount('textWrites');
+    debugLog('ui.text.write', { field: field.name, text });
+  } else {
+    debugCount('textUnchanged');
+    debugLog('ui.text.unchanged', { field: field.name });
   }
 }
 
 function initializeSensors() {
-  const sensors = {
-    time: hmSensor.createSensor(hmSensor.id.TIME),
-    steps: hmSensor.createSensor(hmSensor.id.STEP),
-    weather: null,
-    battery: hmSensor.createSensor(hmSensor.id.BATTERY)
+  debugLog('sensors.create', { names: ['Time', 'Step', 'Battery'] });
+
+  return {
+    time: new Time(),
+    steps: new Step(),
+    battery: new Battery()
   };
-
-  try {
-    if (hmSensor.id.WEATHER !== undefined) {
-      const weather = hmSensor.createSensor(hmSensor.id.WEATHER);
-
-      if (weather && typeof weather.getForecastWeather === 'function') {
-        sensors.weather = weather;
-      }
-    }
-  } catch (_) {
-    /* Cached weather is optional; required metrics remain available. */
-  }
-
-  return sensors;
 }
 
-function createWidgets(sensors) {
-  hmUI.createWidget(hmUI.widget.FILL_RECT, {
+function getDeviceName() {
+  try {
+    const info = getDeviceInfo();
+    /** @type {unknown} */
+    const name = info && info.deviceName;
+
+    if (typeof name === 'string') {
+      // Compact the reported name into a terminal-style device argument.
+      return (
+        name
+          .toLowerCase()
+          .replace(/^amazfit[\s-]*/, '')
+          .replace(/[^a-z0-9]/g, '')
+          .replace(/[0-9]{2}mm$/g, '') || 'unknown'
+      );
+    }
+  } catch (_) {
+    debugLog('device.info.error', { error: String(_) });
+  }
+
+  return 'unknown';
+}
+
+function createWidgets() {
+  createLoggedWidget(ui.widget.FILL_RECT, {
+    radius: 0,
+    angle: 0,
     x: 0,
     y: 0,
     w: LAYOUT.size,
     h: LAYOUT.size,
     color: COLOR.background,
-    show_level: hmUI.show_level.ONLY_NORMAL
+    ...NORMAL_DISPLAY
   });
   drawDebugGrid();
-  createText({ row: 0, size: FONT.header, text: '$ watchstat' });
+  createText({ row: 0, size: FONT.header, text: '$ stat -d ' + getDeviceName() });
   const fields = {
     weekday: createText({
       column: LAYOUT.valueColumn,
@@ -194,31 +265,38 @@ function createWidgets(sensors) {
       text: '--',
       color: COLOR.secondary
     }),
-    time: createText({ row: 2, rows: 4, size: FONT.clock, text: '--:--' }),
+    time: createText({
+      row: 2,
+      rows: 4,
+      size: FONT.clock,
+      text: '--:--',
+      offsetX: -9,
+      columns: 40
+    }),
     steps: null,
-    weather: null,
     battery: null
   };
   const metrics = [
     { key: 'steps', label: 'steps', size: FONT.steps },
-    { key: 'battery', label: 'bat', size: FONT.metric }
+    { key: 'battery', label: 'bat', size: FONT.metric },
+    { key: 'weather', label: 'temp', size: FONT.metric }
   ];
-
-  if (sensors.weather) {
-    metrics.push({ key: 'weather', label: 'temp', size: FONT.metric });
-  }
 
   metrics.forEach((metric, index) => {
     const row = LAYOUT.metricRow + index;
 
     createText({ row, columns: LAYOUT.valueColumn, text: metric.label, color: COLOR.secondary });
-    fields[metric.key] = createText({
-      column: LAYOUT.valueColumn,
-      row,
-      columns: LAYOUT.columns - LAYOUT.valueColumn,
-      size: metric.size,
-      text: '--'
-    });
+    if (metric.key === 'weather') {
+      createTemperature({ row });
+    } else {
+      fields[metric.key] = createText({
+        column: LAYOUT.valueColumn,
+        row,
+        columns: LAYOUT.columns - LAYOUT.valueColumn,
+        size: metric.size,
+        text: '--'
+      });
+    }
   });
 
   createText({
@@ -235,129 +313,142 @@ function createController(sensors, fields) {
   let active = false;
   let destroyed = false;
   let timerId = null;
-  let weatherRefreshKey = null;
   const subscriptions = [];
 
+  Object.keys(fields).forEach((name) => {
+    fields[name].name = name;
+  });
+
   const updateSteps = () => {
+    debugLog('steps.update', { active });
     if (active) {
-      setText(fields.steps, formatMetric(sensors.steps.current, ''));
-    }
-  };
-
-  const updateWeather = (force = false) => {
-    if (!active || !sensors.weather) {
-      return;
-    }
-    const time = sensors.time;
-    const key = [time.year, time.month, time.day, time.hour, Math.floor(time.minute / 30)].join(
-      ':'
-    );
-
-    if (!force && weatherRefreshKey === key) {
-      return;
-    }
-    weatherRefreshKey = key;
-    try {
-      const forecast = sensors.weather.getForecastWeather().forecastData;
-      const today = forecast && forecast.count > 0 && forecast.data && forecast.data[0];
-
-      if (
-        !today ||
-        !valid(today.low) ||
-        !valid(today.high) ||
-        today.low < -100 ||
-        today.high > 100 ||
-        today.low > today.high
-      ) {
-        setText(fields.weather, '--');
-
-        return;
-      }
-      setText(fields.weather, Math.round(today.low) + '/' + Math.round(today.high) + 'C');
-    } catch (_) {
-      setText(fields.weather, '--');
+      debugCount('stepReads');
+      setText(fields.steps, formatMetric(sensors.steps.getCurrent(), ''));
     }
   };
 
   const updateBattery = () => {
+    debugLog('battery.update', { active });
     if (active) {
-      setText(fields.battery, formatMetric(sensors.battery.current, '%', 0, 100));
+      debugCount('batteryReads');
+      setText(fields.battery, formatMetric(sensors.battery.getCurrent(), '%', 0, 100));
     }
   };
 
   const updateClock = () => {
+    debugLog('clock.update', { active });
     if (!active) {
       return;
     }
-    const twelveHour = hmSetting.getTimeFormat() === 0;
+    debugCount('clockReads');
+    const twelveHour = sensors.time.getHourFormat() === TIME_HOUR_FORMAT_12;
+    const time = {
+      year: sensors.time.getFullYear(),
+      month: sensors.time.getMonth(),
+      day: sensors.time.getDate(),
+      hour: sensors.time.getHours(),
+      minute: sensors.time.getMinutes()
+    };
 
-    setText(fields.time, formatTime(sensors.time, twelveHour));
-    setText(fields.period, twelveHour ? (sensors.time.hour < 12 ? 'AM' : 'PM') : '');
-    const date = formatDate(sensors.time);
+    setText(fields.time, formatTime(time, twelveHour));
+    const date = formatDate(time);
 
-    setText(fields.weekday, date.weekday); 
+    setText(fields.weekday, date.weekday);
     setText(fields.date, date.date);
     // Also refresh daily values at midnight; reads do not activate measurements.
     updateSteps();
-    updateWeather();
     updateBattery();
   };
 
-  function subscribe(sensor, event, callback) {
-    // Older runtimes without removal support use minute reads instead.
-    if (
-      typeof sensor.addEventListener !== 'function' ||
-      typeof sensor.removeEventListener !== 'function'
-    ) {
-      return;
-    }
+  function subscribe(name, sensor, callback) {
+    const listener = () => {
+      debugCount('sensorEvents');
+      debugLog('sensor.change', { name, active, destroyed });
+      callback();
+    };
+
+    debugLog('sensor.subscribe.request', { name });
     try {
-      sensor.addEventListener(event, callback);
-      subscriptions.push({ sensor, event, callback });
-    } catch (_) {
-      /* Minute refresh still supplies the value. */
+      sensor.onChange(listener);
+      subscriptions.push({ name, sensor, callback: listener });
+      debugCount('subscriptionsAdded');
+      debugLog('sensor.subscribe.ok', { name, count: subscriptions.length });
+    } catch (error) {
+      debugLog('sensor.subscribe.error', { name, error: String(error) });
     }
   }
 
+  function scheduleMinute() {
+    if (!active || destroyed) {
+      debugLog('timer.schedule.skipped', { active, destroyed });
+
+      return;
+    }
+    const second = sensors.time.getSeconds();
+    const delay = valid(second) && second >= 0 && second < 60 ? (60 - second) * 1000 : 60000;
+
+    timerId = setTimeout(() => {
+      debugCount('timerTicks');
+      debugLog('timer.tick', { id: timerId, active, destroyed });
+      timerId = null;
+      if (!active || destroyed) {
+        debugLog('timer.tick.ignored', { active, destroyed });
+
+        return;
+      }
+      updateClock();
+      debugSummary('minute', { active, subscriptions: subscriptions.length });
+      scheduleMinute();
+    }, delay);
+    debugCount('timersScheduled');
+    debugLog('timer.schedule', { id: timerId, delayMs: delay });
+  }
+
   function pause() {
+    debugLog('controller.pause', { active, destroyed });
     active = false;
     if (timerId !== null) {
-      timer.stopTimer(timerId);
+      clearTimeout(timerId);
+      debugCount('timersCancelled');
+      debugLog('timer.cancel', { id: timerId });
     }
     timerId = null;
-    subscriptions.splice(0).forEach(({ sensor, event, callback }) => {
+    subscriptions.splice(0).forEach(({ name, sensor, callback }) => {
       try {
-        sensor.removeEventListener(event, callback);
+        debugLog('sensor.unsubscribe.request', { name });
+        sensor.offChange(callback);
+        debugCount('subscriptionsRemoved');
+        debugLog('sensor.unsubscribe.ok', { name });
       } catch (_) {
-        /* Runtime teardown. */
+        debugLog('sensor.unsubscribe.error', { name, error: String(_) });
       }
     });
+    debugSummary('pause', { active, timerId, trackedSubscriptions: subscriptions.length });
   }
 
   return {
     resume() {
+      debugLog('controller.resume', { active, destroyed });
       if (destroyed) {
+        debugLog('controller.resume.ignored');
+
         return;
       }
       if (active) {
-        updateWeather(true);
+        debugLog('controller.resume.alreadyActive');
         updateClock();
 
         return;
       }
       active = true;
-      updateWeather(true);
       updateClock();
-      subscribe(sensors.steps, hmSensor.event.CHANGE, updateSteps);
-      subscribe(sensors.battery, hmSensor.event.CHANGE, updateBattery);
-      // Watch-face TIME documents no minute event. Align the documented timer to the minute.
-      const second = sensors.time.second;
-      const delay = valid(second) && second >= 0 && second < 60 ? (60 - second) * 1000 : 60000;
-
-      timerId = timer.createTimer(delay, 60000, updateClock, {});
+      subscribe('steps', sensors.steps, updateSteps);
+      subscribe('battery', sensors.battery, updateBattery);
+      scheduleMinute();
     },
     pause,
     destroy() {
+      debugLog('controller.destroy');
       destroyed = true;
       pause();
     }
@@ -368,16 +459,25 @@ let controller = null;
 
 WatchFace({
   build() {
+    debugLog('watchface.build.start');
     const sensors = initializeSensors();
 
-    controller = createController(sensors, createWidgets(sensors));
-    hmUI.createWidget(hmUI.widget.WIDGET_DELEGATE, {
-      resume_call: () => controller.resume(),
-      pause_call: () => controller.pause()
+    controller = createController(sensors, createWidgets());
+    createLoggedWidget(ui.widget.WIDGET_DELEGATE, {
+      resume_call: () => {
+        debugLog('lifecycle.resume');
+        controller.resume();
+      },
+      pause_call: () => {
+        debugLog('lifecycle.pause');
+        controller.pause();
+      }
     });
     controller.resume();
+    debugSummary('build');
   },
   onDestroy() {
+    debugLog('watchface.destroy');
     if (controller) {
       controller.destroy();
     }

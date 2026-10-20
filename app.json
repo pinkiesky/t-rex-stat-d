@@ -12,12 +12,12 @@
     "vender": "zepp",
     "description": "Minimal terminal watch face"
   },
-  "permissions": [],
+  "permissions": ["data:user.hd.step", "data:os.device.info"],
   "runtime": {
     "apiVersion": {
-      "compatible": "1.0.0",
-      "target": "1.0.1",
-      "minVersion": "1.0.0"
+      "compatible": "3.0.0",
+      "target": "4.2.0",
+      "minVersion": "3.0.0"
     }
   },
   "targets": {

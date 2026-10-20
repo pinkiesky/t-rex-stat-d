@@ -31,18 +31,16 @@ export default [
     }
   },
   {
-    files: ['app.js', 'watchface/**/*.js'],
+    files: ['app.js', 'watchface/**/*.js', 'shared/**/*.js'],
     languageOptions: {
-      sourceType: 'script',
+      sourceType: 'module',
       globals: {
         ...globals.es2020,
         console: 'readonly',
         App: 'readonly',
         WatchFace: 'readonly',
-        hmUI: 'readonly',
-        hmSensor: 'readonly',
-        hmSetting: 'readonly',
-        timer: 'readonly'
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly'
       }
     }
   },

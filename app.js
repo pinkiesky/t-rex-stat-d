@@ -1,10 +1,13 @@
+import { debugLog, debugSummary } from './shared/debug';
+
 App({
   globalData: {},
   onCreate() {
-    console.log('app on create invoke');
+    debugLog('app.create');
   },
 
   onDestroy() {
-    console.log('app on destroy invoke');
+    debugLog('app.destroy');
+    debugSummary('app.destroy');
   }
 });
