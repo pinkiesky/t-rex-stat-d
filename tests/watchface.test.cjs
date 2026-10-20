@@ -7,7 +7,7 @@ const source = fs.readFileSync(
   'utf8'
 );
 
-function boot({ format = 1, debug = false, debugLogs = true } = {}) {
+function boot({ format = 1, debug = false, debugLogs = true, width = 480 } = {}) {
   const logs = [];
   const widgets = [],
     timers = new Map(),
@@ -54,7 +54,10 @@ function boot({ format = 1, debug = false, debugLogs = true } = {}) {
       },
       TIME_HOUR_FORMAT_12: 12
     },
-    '@zos/device': { getDeviceInfo: () => ({ deviceName: 'Amazfit T-Rex 3 Pro' }) },
+    '@zos/utils': { px: (value) => Math.ceil((value * width) / 480) },
+    '@zos/device': {
+      getDeviceInfo: () => ({ width, height: width, deviceName: 'Amazfit T-Rex 3 Pro' })
+    },
     '@zos/ui': {
       data_type: { WEATHER_CURRENT: 42 },
       widget: {
@@ -103,7 +106,7 @@ function boot({ format = 1, debug = false, debugLogs = true } = {}) {
   });
   const loggerSource = fs
     .readFileSync(require('node:path').join(__dirname, '../shared/debug.js'), 'utf8')
-    .replace('export const DEBUG_LOGS = true;', 'const DEBUG_LOGS = ' + debugLogs + ';')
+    .replace(/export const DEBUG_LOGS = (true|false);/, 'const DEBUG_LOGS = ' + debugLogs + ';')
     .replace(/export function /g, 'function ');
 
   mocks['../shared/debug'] = vm.runInContext(
@@ -327,8 +330,9 @@ test('text positions and dimensions use shared symbol-grid edges', () => {
     Math.abs((value - origin) / cell - Math.round((value - origin) / cell)) <= 0.5 / cell + 1e-9;
 
   for (const widget of app.widgets.filter((w) => w.kind === 'TEXT')) {
-    assert.ok(onEdge(widget.x, 64, 18.4));
-    assert.ok(onEdge(widget.x + widget.w, 64, 18.4));
+    const offsetX = widget.text_size === 120 ? -9 : 0;
+
+    assert.ok(onEdge(widget.x - offsetX, 64, 18.4));
     assert.ok(onEdge(widget.y, 80, 31));
     assert.ok(onEdge(widget.y + widget.h + 2, 80, 31));
   }
@@ -380,4 +384,50 @@ test('diagnostic logs describe activity without adding timers or writes', () => 
   assert.equal(app.timers.size, 0);
   app.face.onDestroy();
   assert.ok(app.logs.some((line) => line.includes('watchface.destroy')));
+});
+
+test('44mm target scales layout and all text fits the 466px circle', () => {
+  const app = boot({ width: 466 });
+  const reference = boot();
+  const background = app.widgets.find((widget) => widget.kind === 'RECT');
+
+  assert.equal(background.w, 466);
+  assert.equal(background.h, 466);
+  assert.equal(
+    app.text('23:59').text_size,
+    Math.ceil((reference.text('23:59').text_size * 466) / 480)
+  );
+  assert.equal(app.text('86%').x, app.text('98,765').x);
+  assert.equal(app.text('sun').x, app.text('86%').x);
+  assert.equal(app.widgets.find((widget) => widget.type === 42).x, app.text('86%').x);
+  for (const widget of app.widgets.filter((widget) => ['TEXT', 'TEXT_IMG'].includes(widget.kind))) {
+    for (const x of [widget.x, widget.x + widget.w]) {
+      for (const y of [widget.y, widget.y + widget.h]) {
+        assert.ok(Math.hypot(x - 233, y - 233) < 233, widget.text || widget.kind);
+      }
+    }
+  }
+  const target = require('../app.json').targets['466x466-amazfit-t-rex-3-pro-44-mm'];
+
+  assert.equal(target.designWidth, 480);
+  assert.deepEqual(
+    target.platforms.map((platform) => platform.deviceSource),
+    [10682624, 10682625, 10682627]
+  );
+  for (const asset of [
+    'icon.png',
+    'fonts/Modeseven-L3n5.ttf',
+    ...app.widgets.find((widget) => widget.type === 42).font_array,
+    'temperature/minus.png',
+    'temperature/C.png',
+    'temperature/F.png'
+  ]) {
+    assert.ok(
+      fs.existsSync(
+        require('node:path').join(__dirname, '../assets/466x466-amazfit-t-rex-3-pro-44-mm', asset)
+      )
+    );
+  }
+  assert.equal(app.timers.size, reference.timers.size);
+  assert.equal(app.listeners.size, reference.listeners.size);
 });

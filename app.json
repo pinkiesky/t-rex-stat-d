@@ -46,6 +46,32 @@
         }
       ],
       "designWidth": 480
+    },
+    "466x466-amazfit-t-rex-3-pro-44-mm": {
+      "module": {
+        "watchface": {
+          "path": "watchface/index",
+          "main": 1,
+          "editable": 0,
+          "lockscreen": 0,
+          "hightCost": 0
+        }
+      },
+      "platforms": [
+        {
+          "name": "466x466-amazfit-t-rex-3-pro-44-mm",
+          "deviceSource": 10682624
+        },
+        {
+          "name": "466x466-amazfit-t-rex-3-pro-44-mm",
+          "deviceSource": 10682625
+        },
+        {
+          "name": "466x466-amazfit-t-rex-3-pro-44-mm",
+          "deviceSource": 10682627
+        }
+      ],
+      "designWidth": 480
     }
   },
   "i18n": {

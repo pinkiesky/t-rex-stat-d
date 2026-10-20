@@ -1,6 +1,6 @@
 # CLI Watch Face
 
-Terminal-style watch face for Amazfit T-Rex 3 Pro 48 mm (480 × 480).
+Terminal-style watch face for Amazfit T-Rex 3 Pro 48 mm (480 × 480) and 44 mm (466 × 466).
 Minimum/compatible API is 3.0.0; target API is 4.2.0.
 
 ## Runtime and behavior
@@ -21,7 +21,7 @@ The watch-face `WatchFace` entry point and delegate remain. SDK declarations omi
 Run `npm test`, `npm run lint`, `npm run format:check`, and `zeus build`.
 Use `zeus dev -t 480x480-amazfit-t-rex-3-pro-48-mm` to send the face to the simulator.
 The tests mock modern modules and timer globals, including cancellation of timer ID zero.
-Existing layout checks flag the oversized clock box and manual clock offset; these layout choices are preserved by the migration.
+Both screen sizes use the 480px design baseline. The UI boundary scales coordinates, fonts, and spacing with `@zos/utils.px`; text boxes are constrained to the circular screen. Clock offsets are applied before scaling. Tests cover both sizes and shared value alignment.
 
 API references: [Time](https://docs.zepp.com/docs/reference/device-app-api/newAPI/sensor/Time/), [Step](https://docs.zepp.com/docs/reference/device-app-api/newAPI/sensor/Step/), [Battery](https://docs.zepp.com/docs/reference/device-app-api/newAPI/sensor/Battery/), [device information](https://docs.zepp.com/docs/reference/device-app-api/newAPI/device/getDeviceInfo/), [clearTimeout](https://docs.zepp.com/docs/reference/device-app-api/newAPI/global/clearTimeout/).
 
@@ -53,3 +53,11 @@ All text uses `createText({ column, row, columns, rows, size, text })`. Coordina
 Logs cover app/watch-face creation and destruction, delegate pause/resume, repeated/ignored resume calls, sensor initialization and change callbacks, subscription/removal successes and errors, timer schedules/ticks/cancellation, widget creation, text writes, and unchanged text skips. Summaries at build, minute refresh, pause, and app destruction contain cumulative counters. After pause, expect a cancelled timer, removed subscriptions, and no new scheduled work until resume. An unsubscribe error means the tracked count alone cannot confirm native listener removal.
 
 The clock uses chained `setTimeout` calls, not `setInterval`. Diagnostics add no polling timer or additional sensor reads. System-managed `TEXT_IMG` weather refreshes occur inside the OS and are not observable through these JS logs. Logs show activity, not current draw or energy consumption; logging itself adds overhead. Set `DEBUG_LOGS = false` for normal use and battery comparisons.
+
+## Device targets
+
+- 48 mm: `480x480-amazfit-t-rex-3-pro-48-mm` (device sources 10551552, 10551553, 10551555).
+- 44 mm: `466x466-amazfit-t-rex-3-pro-44-mm` (device sources 10682624, 10682625, 10682627).
+
+Build the smaller model with `zeus build -t 466x466-amazfit-t-rex-3-pro-44-mm`; run it with `zeus dev -t 466x466-amazfit-t-rex-3-pro-44-mm`.
+Both targets deliberately use `designWidth: 480`. Assets in each target directory are stored at design resolution and scaled by Zeus; do not resize them to 466 manually. The temperature-font generator writes to both target directories. Keep the packaged TTF copies synchronized with the source font. Physical 44 mm rendering still needs simulator/watch verification.

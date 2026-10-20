@@ -1,6 +1,7 @@
 import * as ui from '@zos/ui';
 import { Time, Step, Battery, TIME_HOUR_FORMAT_12 } from '@zos/sensor';
 import { getDeviceInfo } from '@zos/device';
+import { px } from '@zos/utils';
 import { debugLog, debugCount, debugSummary } from '../shared/debug';
 
 // The installed app SDK types omit this watch-face data binding.
@@ -25,10 +26,42 @@ const pad = (value) => (value < 10 ? '0' + value : String(value));
 const valid = (value) => typeof value === 'number' && Number.isFinite(value);
 
 function createLoggedWidget(type, options) {
-  const widget = ui.createWidget(type, options);
+  const scaled = { ...options };
+
+  // Keep coordinates in the 480px design space; scale exactly once at the UI boundary.
+  if (options.x !== undefined) {
+    scaled.x = px(options.x);
+  }
+  if (options.y !== undefined) {
+    scaled.y = px(options.y);
+  }
+  if (options.w !== undefined) {
+    scaled.w = px((options.x || 0) + options.w) - px(options.x || 0);
+  }
+  if (options.h !== undefined) {
+    scaled.h = px((options.y || 0) + options.h) - px(options.y || 0);
+  }
+  for (const property of ['text_size', 'char_space', 'h_space', 'radius']) {
+    if (options[property] !== undefined) {
+      scaled[property] = px(options[property]);
+    }
+  }
+  if (type === ui.widget.TEXT || type === ui.widget.TEXT_IMG) {
+    const radius = px(LAYOUT.size) / 2;
+    const verticalDistance = Math.max(
+      Math.abs(scaled.y - radius),
+      Math.abs(scaled.y + scaled.h - radius)
+    );
+    const rightEdge =
+      radius + Math.sqrt(Math.max(0, radius * radius - verticalDistance * verticalDistance));
+
+    // Restrict drawing/ellipsis to the visible circular screen, including the large clock.
+    scaled.w = Math.max(1, Math.min(scaled.w, Math.floor(rightEdge - scaled.x - 1)));
+  }
+  const widget = ui.createWidget(type, scaled);
 
   debugCount('widgetsCreated');
-  debugLog('ui.create', { type, x: options.x, y: options.y });
+  debugLog('ui.create', { type, x: scaled.x, y: scaled.y, w: scaled.w, h: scaled.h });
 
   return widget;
 }
@@ -260,7 +293,7 @@ function createWidgets() {
     date: createText({
       column: 0,
       row: 1,
-      columns: 6,
+      columns: 7,
       size: FONT.header,
       text: '--',
       color: COLOR.secondary
