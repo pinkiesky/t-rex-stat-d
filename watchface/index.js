@@ -9,6 +9,9 @@ import { debugLog, debugCount, debugSummary } from '../shared/debug';
 const DATA_TYPE = /** @type {typeof ui.data_type & { WEATHER_CURRENT: number }} */ (ui.data_type);
 // Watch-face normal-display flag; not exported by @zos/ui.
 const NORMAL_DISPLAY = { show_level: 1 };
+const AOD_DISPLAY = { show_level: 2 };
+// Watch-face widgets are omitted from the installed app SDK types.
+const WATCHFACE_WIDGET = /** @type {typeof ui.widget & { IMG_TIME: number }} */ (ui.widget);
 const COLOR = { background: 0x000000, primary: 0x66ff88, secondary: 0x3d9960 };
 const FONT = { header: 29, clock: 120, steps: 29, metric: 29, footer: 25 };
 // Packaged custom font used by the modern TEXT widget.
@@ -18,6 +21,7 @@ const DEBUG = false;
 // Modeseven: 600-unit advance / 1000 units per em, plus char_space.
 const GRID = { x: 64, y: 80, cellWidth: FONT.metric * 0.6 + 1, cellHeight: FONT.metric, rowGap: 2 };
 const LAYOUT = { size: 480, columns: 20, valueColumn: 8, metricRow: 6 };
+const CLOCK = { row: 2, rows: 4, size: FONT.clock, offsetX: -9, columns: 40 };
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -268,6 +272,39 @@ function getDeviceName() {
   return 'unknown';
 }
 
+function createAlwaysOnClock() {
+  const box = gridBox(CLOCK);
+  const x = box.x + CLOCK.offsetX;
+  const y = box.y + Math.floor((box.h - FONT.clock) / 2);
+  const advance = FONT.clock * 0.6 + 1;
+  const digits = Array.from({ length: 10 }, (_, digit) => 'aod/' + digit + '.png');
+
+  // Native time binding keeps updating while JavaScript timers are suspended in AOD.
+  // Assets use the same font metrics as TEXT: 72px advance and a 96px baseline.
+  createLoggedWidget(WATCHFACE_WIDGET.IMG_TIME, {
+    hour_startX: px(x),
+    hour_startY: px(y),
+    hour_array: digits,
+    hour_space: px(1),
+    hour_zero: 1,
+    hour_align: ui.align.LEFT,
+    minute_startX: px(x + 3 * advance),
+    minute_startY: px(y),
+    minute_array: digits,
+    minute_space: px(1),
+    minute_zero: 1,
+    minute_align: ui.align.LEFT,
+    minute_follow: 0,
+    ...AOD_DISPLAY
+  });
+  createLoggedWidget(ui.widget.IMG, {
+    x: x + 2 * advance,
+    y,
+    src: 'aod/colon.png',
+    ...AOD_DISPLAY
+  });
+}
+
 function createWidgets() {
   createLoggedWidget(ui.widget.FILL_RECT, {
     radius: 0,
@@ -279,6 +316,7 @@ function createWidgets() {
     color: COLOR.background,
     ...NORMAL_DISPLAY
   });
+  createAlwaysOnClock();
   drawDebugGrid();
   createText({ row: 0, size: FONT.header, text: '$ stat -d ' + getDeviceName() });
   const fields = {
@@ -299,12 +337,8 @@ function createWidgets() {
       color: COLOR.secondary
     }),
     time: createText({
-      row: 2,
-      rows: 4,
-      size: FONT.clock,
-      text: '--:--',
-      offsetX: -9,
-      columns: 40
+      ...CLOCK,
+      text: '--:--'
     }),
     steps: null,
     battery: null

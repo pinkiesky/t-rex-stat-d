@@ -61,6 +61,8 @@ function boot({ format = 1, debug = false, debugLogs = true, width = 480 } = {})
     '@zos/ui': {
       data_type: { WEATHER_CURRENT: 42 },
       widget: {
+        IMG: 'IMG',
+        IMG_TIME: 'IMG_TIME',
         TEXT_IMG: 'TEXT_IMG',
         TEXT: 'TEXT',
         FILL_RECT: 'RECT',
@@ -174,6 +176,51 @@ test('minute timer, local midnight rollover, live metrics and unchanged text', (
   assert.equal(app.widgets.length, count);
 });
 
+test('AOD contains only native hours, minutes and colon at the normal clock position', () => {
+  for (const width of [480, 466]) {
+    const app = boot({ width });
+
+    const scale = (value) => Math.ceil((value * width) / 480);
+
+    const aod = app.widgets.filter((widget) => widget.show_level & 2);
+    const clock = aod.find((widget) => widget.kind === 'IMG_TIME');
+    const colon = aod.find((widget) => widget.kind === 'IMG');
+    const normal = app.text('23:59');
+
+    assert.equal(aod.length, 2);
+    assert.equal(clock.hour_startX, normal.x);
+    assert.equal(clock.hour_startY, scale(143));
+    assert.equal(clock.minute_startX, scale(274));
+    assert.equal(clock.minute_startY, clock.hour_startY);
+    assert.equal(colon.x, scale(201));
+    assert.equal(colon.y, clock.hour_startY);
+    assert.equal(clock.hour_zero, 1);
+    assert.equal(clock.minute_zero, 1);
+    assert.equal(clock.minute_follow, 0);
+    assert.equal(clock.second_array, undefined);
+    assert.equal(clock.hour_array.length, 10);
+    assert.deepEqual(clock.hour_array, clock.minute_array);
+    const target = Object.keys(require('../app.json').targets).find((name) =>
+      name.startsWith(String(width))
+    );
+
+    for (const asset of [...clock.hour_array, colon.src]) {
+      const png = fs.readFileSync(require('node:path').join(__dirname, '../assets', target, asset));
+
+      assert.equal(png.readUInt32BE(16), 72);
+      assert.equal(png.readUInt32BE(20), 120);
+    }
+    clock.setProperty = () => assert.fail('Native AOD clock must not depend on JS updates');
+    app.delegate.pause_call();
+    assert.equal(app.timers.size, 0);
+    assert.equal(app.listeners.size, 0);
+    app.sensors.TIME.hour = 8;
+    app.delegate.resume_call();
+    assert.ok(app.text('08:59'));
+    app.face.onDestroy();
+  }
+});
+
 test('12-hour midnight/noon and leap-day date formatting', () => {
   const app = boot({ format: 0 });
 
@@ -248,6 +295,9 @@ test('manifest selects API 3 minimum and API 4.2 target', () => {
     minVersion: '3.0.0'
   });
   assert.equal(manifest.app.appType, 'watchface');
+  for (const target of Object.values(manifest.targets)) {
+    assert.equal(target.module.watchface.lockscreen, 1, 'AOD must be enabled in every target');
+  }
   const target = manifest.targets['480x480-amazfit-t-rex-3-pro-48-mm'];
 
   assert.equal(target.designWidth, 480);

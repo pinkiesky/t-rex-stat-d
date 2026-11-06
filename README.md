@@ -20,6 +20,18 @@ Use `zeus dev -t 480x480-amazfit-t-rex-3-pro-48-mm` to send the face to the simu
 
 Both screen sizes use the 480px design baseline.
 
+## Always-on display
+
+AOD shows only `HH:MM` in the normal clock's position and size, with green Modeseven
+characters drawn as 2px inner outlines.
+Hours and minutes use Zepp's native `IMG_TIME` binding so they can update while JavaScript
+is suspended. The rest of the face is visible only in normal display mode.
+Enable AOD on the watch and select the style that follows the current watch face.
+
+Regenerate the packaged clock glyphs with `node scripts/generate-aod-font.cjs` (requires
+ImageMagick). On both watch sizes, verify alignment when entering/leaving AOD, minute
+rollover while asleep, and 12/24-hour formatting; unit tests cannot exercise native rendering.
+
 ## Code style
 
 Run `npm run lint` and `npm run format:check` to check code style. Use
